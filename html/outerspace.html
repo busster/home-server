@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Space</title>
+  <style>
+    html,body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="space"></canvas>
+  <script>
+    const canvas = document.getElementById('space')
+
+    const width = 50000
+    const height = 50000
+
+    // const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+
+    const chunkWidth = width * 0.02 // Math.min(width * 0.1, 100)
+    const chunkHeight = height * 0.02 // Math.min(height * 0.1, 100)
+
+    const MAX_WORKERS = 5
+    let COUNT = 0
+    function* fragmentIterator(ctx, { width, height, chunkWidth, chunkHeight }) {
+      for (let x = 0; x < width; x += chunkWidth) {
+        for (let y = 0; y < height; y += chunkHeight) {
+          const worker = new Worker('space/fragmentCreator.js')
+  
+          const imagedata = ctx.createImageData(chunkWidth, chunkHeight)
+  
+          worker.postMessage([imagedata, chunkWidth, chunkHeight])
+
+          COUNT++
+
+          worker.onmessage = function(e) {
+            console.log('thread done')
+            ctx.putImageData(e.data, x, y)
+            worker.terminate()
+            COUNT--
+          }
+          yield 1
+        }
+      }
+    }
+
+    const it = fragmentIterator(ctx, { width, height, chunkWidth, chunkHeight })
+
+
+    let done = it.next().done
+    const doWork = () => {
+      setTimeout(() => {
+        for (let i = 0; i < MAX_WORKERS - COUNT; i++) {
+          if (done) break
+          done = it.next().done
+        }
+        if (!done) doWork()
+      }, 0)
+    }
+    doWork()
+
+    // const doWork = () => {
+    //   return new Promise((resolve, reject) => {
+    //     console.log('in prom')
+    //     while (COUNT < MAX_WORKERS && !done) {
+    //       done = it.next().done
+    //     }
+    //     resolve()
+    //   }).then(() => {
+    //     console.log('in then')
+    //     if (!done) {
+    //       console.log('do again')
+    //       doWork()
+    //     }
+    //   })
+    // }
+    // doWork()
+    // let interval = setInterval(() => {
+    //   if (COUNT < MAX_WORKERS) {
+    //     done = it.next().done
+    //     if (done) clearInterval(interval)
+    //   }
+    // }, 1000)
+
+
+    // for (let x = 0; x < width; x += chunkWidth) {
+    //   for (let y = 0; y < height; y += chunkHeight) {
+    //     const workerPromise = new Promise((resolve, reject) => {
+    //       const worker = new Worker('space/fragmentCreator.js')
+  
+    //       const imagedata = ctx.createImageData(chunkWidth, chunkHeight)
+
+    //       // console.log(workers.length)
+  
+    //       worker.postMessage([imagedata, chunkWidth, chunkHeight])
+    //       worker.onmessage = function(e) {
+    //         ctx.putImageData(e.data, x, y)
+    //         worker.terminate()
+    //         resolve()
+    //       }
+    //     })
+    //     workers.push(workers)
+    //   }
+    // }
+
+    // Promise.all(workers).then(() => {
+    //   space.appendChild(canvas)
+    // })
+
+
+    // var myWorker = new Worker('space/fragmentCreator.js');
+    // myWorker.postMessage([1, 2]);
+    // myWorker.onmessage = function(e) {
+    //   console.log(e)
+    //   console.log('Message received from worker');
+    // }
+  </script>
+</body>
+</html>

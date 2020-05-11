@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Document</title>
+  <style>
+    html,body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="space"></canvas>
+  <script>
+    function hexToRgbA(hex){
+        var c;
+        if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+            c= hex.substring(1).split('');
+            if(c.length== 3){
+                c= [c[0], c[0], c[1], c[1], c[2], c[2]];
+            }
+            c= '0x'+c.join('');
+            return {
+              r: (c>>16)&255,
+              g: (c>>8)&255,
+              b: c&255,
+              a: 1
+            }
+        }
+        throw new Error('Bad Hex');
+    }
+
+    const randomWeighted = (values) => {
+      let i, pickedValue,
+              randomNr = Math.random(),
+              threshold = 0;
+
+      for (i = 0; i < values.length; i++) {
+          if (values[i].probability === '*') {
+              continue;
+          }
+
+          threshold += values[i].probability;
+          if (threshold > randomNr) {
+                  pickedValue = values[i].value;
+                  break;
+          }
+
+          if (!pickedValue) {
+              //nothing found based on probability value, so pick element marked with wildcard
+              pickedValue = values.find((value) => value.probability === '*').value;
+          }
+      }
+
+      return pickedValue;
+    }
+
+    const stylesWeighted = [
+      {
+        value: '#0F2749',
+        probability: 0.00001
+      },
+      {
+        value: '#5DC3EF',
+        probability: 0.0001
+      },
+      {
+        value: '#4978BC',
+        probability: 0.000001
+      },
+      {
+        value: '#415A77',
+        probability: 0.00001
+      },
+      {
+        value: '#778DA9',
+        probability: 0.00205
+      },
+      {
+        value: '#16161B',
+        probability: 0.0000021
+      },
+      {
+        value: '#202025',
+        probability: 0.0003021
+      },
+      {
+        value: '#3F3F4A',
+        probability: 0.0023025
+      },
+      {
+        value: '#72747F',
+        probability: 0.0000230925
+      },
+      {
+        value: '#F6F6F7',
+        probability: 0.000017
+      },
+      {
+        value: '#000',
+        probability: '*'
+      }
+    ]
+
+    const space = document.getElementById('space')
+    const context = space.getContext('2d')
+
+    const HEIGHT = 10000
+    const WIDTH = 10000
+
+    space.width = WIDTH
+    space.height = HEIGHT
+
+    const imagedata = context.createImageData(WIDTH, HEIGHT);
+
+    for (let x = 0; x < WIDTH; x++) {
+      for (let y = 0; y < HEIGHT; y++) {
+        const pixelindex = (y * WIDTH + x) * 4;
+        const { r, g, b, a } = hexToRgbA(randomWeighted(stylesWeighted))
+        imagedata.data[pixelindex] = r;
+        imagedata.data[pixelindex + 1] = g;
+        imagedata.data[pixelindex + 2] = b;
+        imagedata.data[pixelindex + 3] = 255;
+      }
+    }
+    context.putImageData(imagedata, 0, 0);
+  </script>
+</body>
+</html>

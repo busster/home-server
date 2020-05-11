@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>VaporClock</title>
+
+  <style>
+    html,body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+    }
+    #clock {
+      display: grid;
+      grid-template-columns: repeat(23, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      height: 100%;
+      width: 100%;
+    }
+    .clock-cell {
+      /* min-height: 10px;
+      min-width: 10px; */
+      border: 15px solid transparent;
+    }
+    .empty {
+      border: 15px solid transparent !important;
+    }
+    .left {
+      -webkit-box-shadow: inset -15px 14px 81px 0px rgba(255,255,255,1);
+      -moz-box-shadow: inset -15px 14px 81px 0px rgba(255,255,255,1);
+      box-shadow: inset -15px 14px 81px 0px rgba(255,255,255,1);
+      border-left-color: black;
+    }
+    .right {
+      border-right-color: black;
+    }
+    .top {
+      border-top-color: black;
+    }
+    .bottom {
+      border-bottom-color: black;
+    }
+    .colon {
+      /* border-bottom: 2px solid blue;
+      border-top: 2px solid blue; */
+      -webkit-box-shadow: inset -15px 14px 81px 0px rgba(255,255,255,1);
+      -moz-box-shadow: inset -15px 14px 81px 0px rgba(255,255,255,1);
+      box-shadow: inset -15px 14px 81px 0px rgba(255,255,255,1);
+    }
+
+    #playback-info {
+      position: absolute;
+      top: 0;
+      right: 0;
+      text-align: right;
+      width: 100%;
+      height: 25%;
+      color: white;
+      font-size: 2.5rem;
+    }
+    .info {
+      height: 50%;
+      margin-right: 4%;
+    }
+    #artwork {
+      opacity: 0.25;
+      width: 50%;
+      height: 300%;
+      object-fit: cover;
+      position: absolute;
+      right: 0;
+      z-index: -1;
+    }
+    .hoverable {
+      transition: opacity 250ms ease-in-out;
+      opacity: 0;
+      background-repeat: no-repeat;
+      background-size: cover;
+      cursor: pointer;
+    }
+    .hoverable:hover {
+      opacity: 1;
+    }
+    .hoverable-a {
+      background-image: linear-gradient(319deg, #e4ff6d 0%, #ffad42 37%, #e4ff6d 100%);
+    }
+    .hoverable-b {
+      background-image: linear-gradient(319deg, #f2dd6e 0%, #cff27e 37%, #ef959d 100%);
+    }
+    .hoverable-c {
+      background-image: linear-gradient(319deg, #f2dd6e 0%, #cff27e 37%, #ef959d 100%);
+    }
+</style>
+
+</head>
+<body>
+  <div id="playback-info">
+    <div class="info">
+      <div id="title"></div>
+      <div id="artist"></div>
+      <div id="album"></div>
+    </div>
+    <img id="artwork">
+  </div>
+  <div id="clock"></div>
+  <audio style="position: absolute; width: 0px; height: 0px;" id="audio" controls crossorigin="anonymous">
+    <source src="https://radio.plaza.one/ogg" type="audio/ogg"><source>
+    <!-- <source src="horse.ogg" type="audio/ogg">
+    <source src="horse.mp3" type="audio/mpeg">
+  Your browser does not support the audio element. -->
+  </audio>
+    <!-- <video style="position: absolute;" width="0" height="0" controls>
+      <source crossorigin="anonymous" src="https://radio.plaza.one/ogg" type="video/mp4">
+      Your browser does not support the video tag.
+    </video> -->
+  <script>
+    /*
+      -------------------------------------------------------------------------------------------------- 
+      COOL SHIT
+      --------------------------------------------------------------------------------------------------
+                        http://cs.gettysburg.edu/~duncjo01/archive/patterns/lain/
+                        https://tinyclouds.org/
+                        http://art.teleportacia.org/
+                        https://fanael.github.io/hardware-prefetching-in-pentium-iii.html
+      --------------------------------------------------------------------------------------------------
+    */
+
+    // var audio = new Audio('https://www.youtube.com/watch?v=hHW1oY26kxQ');
+    // audio.play();
+
+    const body = document.querySelector('body')
+    let settings = {
+      volume: 0.25,
+      opacity: 1
+    }
+    body.onwheel = function(e) {
+      let setting = e.clientX < window.innerWidth / 2 ? 'volume' : 'opacity'
+      let changeVal = settings[setting]
+
+      changeVal += event.deltaY * -0.00025
+      changeVal = Math.min(Math.max(0, changeVal), 1)
+
+      switch (setting) {
+        case 'volume':
+          audioEl.volume = changeVal
+          break
+        case 'opacity':
+          body.style.opacity = changeVal
+          break
+      }
+
+      settings[setting] = changeVal
+    }
+
+
+    function toColor(num) {
+        num >>>= 0;
+        var b = num & 0xFF,
+            g = (num & 0xFF00) >>> 8,
+            r = (num & 0xFF0000) >>> 16,
+            a = ( (num & 0xFF000000) >>> 24 ) / 255 ;
+        return "rgba(" + [r, g, b, a].join(",") + ")";
+    }
+    const clockEl = document.getElementById('clock')
+
+    const titleEl = document.getElementById('title')
+    const artistEl = document.getElementById('artist')
+    const albumEl = document.getElementById('album')
+    const artworkEl = document.getElementById('artwork')
+
+    const E = 0
+    const L = 1
+    const R = 3
+    const T = 2
+    const B = 4
+
+    const C = 5
+
+    let clock = [
+    /*   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] */
+    ]
+    const emptyClock = []
+    for (let r = 0; r < 4; r++) {
+      clock.push([])
+      emptyClock.push([])
+      for (let c = 0; c < 23; c++) {
+        clock[r].push([])
+        emptyClock[r].push([])
+        const div = document.createElement('div')
+        div.classList.add('clock-cell')
+        clockEl.appendChild(div)
+      }
+    }
+
+    const createClock = () => {
+      const newClock = []
+      for (let r = 0; r < 4; r++) {
+        newClock.push([])
+        for (let c = 0; c < 23; c++) {
+          newClock[r].push([])
+        }
+      }
+      return newClock
+    }
+
+
+    const clockCells = [...clockEl.children]
+
+
+    const HT = [1,1]
+    const HO = [4,1]
+    const MT = [9,1]
+    const MO = [12,1]
+    const ST = [17,1]
+    const SO = [20,1]
+
+    const C1 = [7,1]
+    const C2 = [15,1]
+
+    const reset = (func) => (col, row) => {
+      clock[row][col] 				= [] 	// top-left
+      clock[row][col + 1] 		= [] 	// top-right
+      clock[row + 1][col] 		= [] 	// bot-left
+      clock[row + 1][col + 1] = [] 	// bot-right
+      func(col, row)
+    }
+
+    const zero = (col, row) => {
+      clock[row][col] 				= [L, T] 	// top-left
+      clock[row][col + 1] 		= [R, T] 	// top-right
+      clock[row + 1][col] 		= [L, B] 	// bot-left
+      clock[row + 1][col + 1] = [R, B] 	// bot-right
+    }
+    const one = (col, row) => {
+      clock[row][col] 				= [E] 	// top-left
+      clock[row][col + 1] 		= [R] 	// top-right
+      clock[row + 1][col] 		= [E] 	// bot-left
+      clock[row + 1][col + 1] = [R] 	// bot-right
+    }
+    const two = (col, row) => {
+      clock[row][col] 				= [T] 	// top-left
+      clock[row][col + 1] 		= [R, T] 	// top-right
+      clock[row + 1][col] 		= [T, L, B] 	// bot-left
+      clock[row + 1][col + 1] = [T, B] 	// bot-right
+    }
+    const three = (col, row) => {
+      clock[row][col] 				= [T] 	// top-left
+      clock[row][col + 1] 		= [R, T] 	// top-right
+      clock[row + 1][col] 		= [T, B] 	// bot-left
+      clock[row + 1][col + 1] = [T, B, R] 	// bot-right
+    }
+    const four = (col, row) => {
+      clock[row][col] 				= [L] 	// top-left
+      clock[row][col + 1] 		= [R] 	// top-right
+      clock[row + 1][col] 		= [T] 	// bot-left
+      clock[row + 1][col + 1] = [T, R] 	// bot-right
+    }
+    const five = (col, row) => {
+      clock[row][col] 				= [L, T] 	// top-left
+      clock[row][col + 1] 		= [T] 	// top-right
+      clock[row + 1][col] 		= [T, B] 	// bot-left
+      clock[row + 1][col + 1] = [T, R, B] 	// bot-right
+    }
+    const six = (col, row) => {
+      clock[row][col] 				= [L, T] 	// top-left
+      clock[row][col + 1] 		= [T] 	// top-right
+      clock[row + 1][col] 		= [T, L, B] 	// bot-left
+      clock[row + 1][col + 1] = [T, R, B] 	// bot-right
+    }
+    const seven = (col, row) => {
+      clock[row][col] 				= [T] 	// top-left
+      clock[row][col + 1] 		= [T, R] 	// top-right
+      clock[row + 1][col] 		= [E] 	// bot-left
+      clock[row + 1][col + 1] = [R] 	// bot-right
+    }
+    const eight = (col, row) => {
+      clock[row][col] 				= [L, T] 	// top-left
+      clock[row][col + 1] 		= [R, T] 	// top-right
+      clock[row + 1][col] 		= [L, B, T] 	// bot-left
+      clock[row + 1][col + 1] = [R, B, T] 	// bot-right
+    }
+    const nine = (col, row) => {
+      clock[row][col] 				= [L, T] 	// top-left
+      clock[row][col + 1] 		= [R, T] 	// top-right
+      clock[row + 1][col] 		= [T, B] 	// bot-left
+      clock[row + 1][col + 1] = [R, B, T] 	// bot-right
+    }
+
+    const colon = (col, row) => {
+      clock[row][col] 				= [C]
+      clock[row + 1][col] 		= [C]
+    }
+
+
+    const DRAW_MAP = {
+      0: reset(zero),
+      1: reset(one),
+      2: reset(two),
+      3: reset(three),
+      4: reset(four),
+      5: reset(five),
+      6: reset(six),
+      7: reset(seven),
+      8: reset(eight),
+      9: reset(nine)
+    }
+
+    const clear = () => {
+      clock = createClock()
+    }
+
+    const draw = () => {
+      body.style.backgroundColor = toColor(new Date().getTime())
+      clock
+      .flatMap(row => row)
+      .forEach((cell, index) => {
+        clockCells[index].classList.remove('top')
+        clockCells[index].classList.remove('left')
+        clockCells[index].classList.remove('right')
+        clockCells[index].classList.remove('bottom')
+        clockCells[index].classList.remove('empty')
+        let classes = []
+        cell.forEach(border => {
+          let toggle = 'empty'
+          switch (border) {
+            case L:
+              toggle = 'left'
+              break;
+            case T:
+              toggle = 'top'
+              break;
+            case R:
+              toggle = 'right'
+              break;
+            case B:
+              toggle = 'bottom'
+              break;
+            case E:
+              toggle = 'empty'
+              break;
+            case C:
+              toggle = 'colon'
+              break;
+          }
+          classes.push(toggle)
+        })
+        classes.forEach(c => {
+          clockCells[index].classList.add(c)
+        })
+      })
+    }
+
+    let interval2
+    const startClock = () => {
+      return setInterval(() => {
+        const date = new Date()
+        
+        const minutes = date.getMinutes()
+        const hours = date.getHours()
+        const seconds = date.getSeconds()
+        
+        let minutesString = minutes.toFixed()
+        let hoursString = hours.toFixed()
+        let secondsString = seconds.toFixed()
+        
+        if (minutesString.length === 1) minutesString = '0' + minutesString
+        if (hoursString.length === 1) hoursString = '0' + hoursString
+        if (secondsString.length === 1) secondsString = '0' + secondsString
+        
+        const [mt, mo] = minutesString.split('')
+        const [ht, ho] = hoursString.split('')
+        const [st, so] = secondsString.split('')
+        
+        // console.log('minutes: ' + minutes)
+        // console.log(`mt: ${mt}, mo: ${mo}`)
+        
+        //clear()
+        
+        DRAW_MAP[parseInt(ht || 0)](...HT)
+        DRAW_MAP[parseInt(ho || 0)](...HO)
+        DRAW_MAP[parseInt(mt || 0)](...MT)
+        DRAW_MAP[parseInt(mo || 0)](...MO)
+        DRAW_MAP[parseInt(st || 0)](...ST)
+        DRAW_MAP[parseInt(so || 0)](...SO)
+
+        colon(...C1)
+        colon(...C2)
+        
+        draw()
+      }, 250)
+    }
+    let interval = startClock()
+    
+
+    const fetchStatus = () => {
+      return new Promise((resolve, reject) => {
+        // 1. Create a new XMLHttpRequest object
+        let xhr = new XMLHttpRequest();
+  
+        // 2. Configure it: GET-request for the URL /article/.../load
+        xhr.open('GET', '/status');
+  
+        // 3. Send the request over the network
+        xhr.send();
+  
+        // 4. This will be called after the response is received
+        xhr.onload = function() {
+          if (xhr.status != 200) { // analyze HTTP status of the response
+            // alert(`Error ${xhr.status}: ${xhr.statusText}`); // e.g. 404: Not Found
+            reject({})
+          } else { // show the result
+            // alert(`Done, got ${xhr.response.length} bytes`); // responseText is the server
+            // console.log(xhr.response)
+            resolve(JSON.parse(xhr.response))
+          }
+        };
+  
+        xhr.onprogress = function(event) {
+          if (event.lengthComputable) {
+            // alert(`Received ${event.loaded} of ${event.total} bytes`);
+          } else {
+            // alert(`Received ${event.loaded} bytes`); // no Content-Length
+          }
+  
+        };
+  
+        xhr.onerror = function() {
+          reject('Request failed')
+        };
+      })
+    }
+
+    const startFetching = () => {
+      return setInterval(function performStatusUpdate () {
+        fetchStatus().then((data) => {
+          const { artist, title, album, artwork_src } = data.playback
+          titleEl.innerText = title
+          artistEl.innerText = artist
+          albumEl.innerText = album
+          artworkEl.src = artwork_src
+          console.log(`
+            artist: ${artist},
+            title: ${title},
+            album: ${album},
+            artwork_src: ${artwork_src},
+          `)
+        }).catch((error) => {})
+        return performStatusUpdate
+      }(), 60000)
+    }
+
+    const audioEl = document.getElementById('audio')
+    {
+      let clockRun = false
+      const secretButtonA = clockEl.childNodes[69] // :P
+      secretButtonA.classList.add('hoverable')
+      secretButtonA.classList.add('hoverable-a')
+      secretButtonA.addEventListener('click', () => {
+        if (clockRun) {
+          clearInterval(interval)
+          interval = startClock()
+        } else {
+          clearInterval(interval)
+        }
+        clockRun = !clockRun
+      })
+    }
+    {
+      let play = true
+      const secretButtonB = clockEl.childNodes[70]
+      secretButtonB.classList.add('hoverable')
+      secretButtonB.classList.add('hoverable-b')
+      const playHandler = () => {
+        if (play) {
+          audioEl.volume = settings.volume
+          audioEl.play()
+          interval2 = startFetching()
+        } else {
+          audioEl.pause()
+          clearInterval(interval2)
+        }
+        play = !play
+      }
+      document.addEventListener('keyup', (event) => {
+        const keyName = event.key;
+
+        if (keyName === ' ' || keyName === 'Spacebar') {
+          playHandler()
+        }
+      }, false);
+      secretButtonB.addEventListener('click', playHandler)
+    }
+  </script>
+</body>
+</html>
